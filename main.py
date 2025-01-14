@@ -7,6 +7,7 @@ import os
 import datetime
 import time
 import requests
+from binance import HistoricalKlinesType
 from binance.client import Client
 
 import constants
@@ -72,38 +73,23 @@ def get_pairs_data_parallel(symbols: list, start_time: pd.Timestamp) -> dict:
 
         url = f"https://fapi.binance.com/fapi/v1/klines"
 
-        all_data = []
-        current_start_time_ms = start_time_ms
+        try:
 
-        while current_start_time_ms < end_time_ms:
-            try:
-                if used_request_weight > request_weight_limit:
-                    print(f'Used request weight exceeded the limit. Waiting {request_weight_limit_interval} seconds...')
-                    time.sleep(request_weight_limit_interval)
-                    used_request_weight = 0
+            # Fetch historical kline data using python-binance
+            klines = client.get_historical_klines(
+                symbol=symbol,
+                interval=constants.timeframe,
+                start_str=start_time_ms,
+                end_str=end_time_ms,
+                klines_type=HistoricalKlinesType.FUTURES
+            )
 
-                # Fetch historical kline data using python-binance
-                klines = client.futures_klines(
-                    symbol=symbol,
-                    interval=constants.timeframe,
-                    startTime=current_start_time_ms,
-                    endTime=end_time_ms,
-                )
-
-                if not klines:
-                    break
-
-                all_data.extend(klines)
-                current_start_time_ms = klines[-1][0] + 1  # Move to the next timestamp after the last one fetched
-
-                used_request_weight += 10
-
-            except Exception as e:
-                print(e)
-                return symbol, None
+        except Exception as e:
+            print(e)
+            return symbol, None
 
         # Convert UNIX timestamp to UTC time format and create DataFrame
-        data = [[datetime.datetime.fromtimestamp(row[0] / 1000, datetime.UTC)] + row[1:5] for row in all_data]
+        data = [[datetime.datetime.fromtimestamp(row[0] / 1000, datetime.UTC)] + row[1:5] for row in klines]
 
         pair_df = pd.DataFrame(data, columns=["time", "open", "high", "low", "close"])
 
@@ -146,7 +132,6 @@ for symbol, pair_df in all_pairs_data.items():
     if pair_df is not None:
         file_path = os.path.join(output_dir, f"{symbol}.hdf5")
         pair_df.to_hdf(file_path, key="pair_df", mode="w")
-        print(f"Saved {symbol} data to {file_path}")
 
 
 # Zip the directory after fetching all data
