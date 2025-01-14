@@ -7,6 +7,7 @@ import os
 import datetime
 import time
 import requests
+from binance.client import Client
 
 import constants
 import zipfile
@@ -40,6 +41,9 @@ request_weight_limit, request_weight_limit_interval = get_rate_limits()
 
 used_request_weight = 0
 
+# Initialize the Binance client
+client = Client('', '')
+
 
 def get_pairs_data_parallel(symbols: list, start_time: pd.Timestamp) -> dict:
     """
@@ -60,7 +64,7 @@ def get_pairs_data_parallel(symbols: list, start_time: pd.Timestamp) -> dict:
         # Convert start_time to milliseconds
         start_time_ms = int(start_time.timestamp() * 1000)
         end_time_ms = int(time.time() * 1000)  # Current time in milliseconds
-        max_candles = 1000
+        max_candles = 10000
 
         with counter_lock:
             fetch_counter += 1
@@ -72,29 +76,25 @@ def get_pairs_data_parallel(symbols: list, start_time: pd.Timestamp) -> dict:
         current_start_time_ms = start_time_ms
 
         while current_start_time_ms < end_time_ms:
-            params = {
-                "symbol": symbol,
-                "interval": constants.timeframe,
-                "startTime": current_start_time_ms,
-                "endTime": end_time_ms,
-                "limit": max_candles
-            }
-
             try:
                 if used_request_weight > request_weight_limit:
                     print(f'Used request weight exceeded the limit. Waiting {request_weight_limit_interval} seconds...')
                     time.sleep(request_weight_limit_interval)
                     used_request_weight = 0
 
-                # Fetch historical kline data
-                response = requests.get(url, params=params)
-                response.raise_for_status()
-                data = response.json()
+                # Fetch historical kline data using python-binance
+                klines = client.futures_klines(
+                    symbol=symbol,
+                    interval=constants.timeframe,
+                    startTime=current_start_time_ms,
+                    endTime=end_time_ms,
+                )
 
-                if not data:
+                if not klines:
                     break
-                all_data.extend(data)
-                current_start_time_ms = data[-1][0] + 1  # Move to the next timestamp after the last one fetched
+
+                all_data.extend(klines)
+                current_start_time_ms = klines[-1][0] + 1  # Move to the next timestamp after the last one fetched
 
                 used_request_weight += 10
 
