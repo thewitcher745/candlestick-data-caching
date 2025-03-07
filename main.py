@@ -46,7 +46,7 @@ used_request_weight = 0
 client = Client('', '')
 
 
-def get_pairs_data_parallel(symbols: list, start_time: pd.Timestamp) -> dict:
+def get_pairs_data_parallel(symbols: list, start_time: pd.Timestamp, end_time: pd.Timestamp) -> dict:
     """
     Fetch the last N historical kline data for given symbols and return it as a dictionary of DataFrames.
 
@@ -64,8 +64,7 @@ def get_pairs_data_parallel(symbols: list, start_time: pd.Timestamp) -> dict:
 
         # Convert start_time to milliseconds
         start_time_ms = int(start_time.timestamp() * 1000)
-        end_time_ms = int(time.time() * 1000)  # Current time in milliseconds
-        max_candles = 10000
+        end_time_ms = int(end_time.timestamp() * 1000)
 
         with counter_lock:
             fetch_counter += 1
@@ -125,7 +124,7 @@ output_dir = f"./cached-data/{constants.timeframe}-{constants.end_date}"
 if not os.path.exists(output_dir):
     os.makedirs(output_dir)
 
-all_pairs_data = get_pairs_data_parallel(my_pairs, pd.to_datetime(constants.start_date))
+all_pairs_data = get_pairs_data_parallel(my_pairs, pd.to_datetime(constants.start_date), pd.to_datetime(constants.end_date))
 
 # Write each DataFrame to an HDF5 file
 for symbol, pair_df in all_pairs_data.items():
